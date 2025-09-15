@@ -8,18 +8,41 @@ resources:
         # Deploy metric views using uploaded Python file with serverless compute
         - task_key: "deploy_metric_views"
           spark_python_task:
-            python_file: "${workspace.file_path}/deploy_metric_views.py"
+            python_file: "${workspace.file_path}/simple_deploy_metric_views.py"
             parameters:
+              - "--environment"
+              - "${var.environment}"
               - "--catalog"
               - "${var.catalog}"
               - "--schema" 
               - "${var.schema}"
               - "--warehouse-id"
               - "${var.sql_warehouse_id}"
+              - "--verbose"
           
           # The key that references an environment spec for serverless compute
           environment_key: default
           timeout_seconds: 3600
+
+        # Run automated tests to validate deployed metric views
+        - task_key: "test_metric_views"
+          depends_on:
+            - task_key: "deploy_metric_views"
+          spark_python_task:
+            python_file: "${workspace.file_path}/scripts/test_runner.py"
+            parameters:
+              - "--environment"
+              - "${var.environment}"
+              - "--catalog"
+              - "${var.catalog}"
+              - "--schema"
+              - "${var.schema}"
+              - "--warehouse-id"
+              - "${var.sql_warehouse_id}"
+              - "--verbose"
+          
+          environment_key: default
+          timeout_seconds: 1800
       
       # List of task execution environment specifications for serverless compute
       environments:
@@ -30,6 +53,9 @@ resources:
             dependencies:
               - databricks-sdk
               - pyyaml
+              - jinja2
+              - databricks-sql-connector
+              - pandas
           
       # Job-level settings
       tags:

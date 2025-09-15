@@ -1,0 +1,40 @@
+# Example templated metric view using Jinja2 for environment-specific configuration
+version: 0.1
+source: {{ data_sources.fact_orders }}
+filter: order_date > '{{ global.date_filters.min_date | default("1990-01-01") }}'
+
+dimensions:
+  - name: Order Month
+    expr: DATE_TRUNC('MONTH', order_date)
+  - name: Order Year
+    expr: YEAR(order_date)
+  - name: Region
+    expr: customer_region
+  - name: Product Category
+    expr: product_category
+
+measures:
+  - name: Total Revenue
+    expr: SUM(order_amount)
+  - name: Order Count
+    expr: COUNT(*)
+  - name: Average Order Value
+    expr: AVG(order_amount)
+  - name: Unique Customers
+    expr: COUNT(DISTINCT customer_id)
+
+# Environment-specific joins (only applied if joins are defined in environment config)
+{% if joins is defined %}
+joins:
+{% for join in joins %}
+  - type: {{ join.type }}
+    source: {{ join.source }}
+    condition: {{ join.condition }}
+{% endfor %}
+{% endif %}
+
+# Apply environment-specific tags
+tags:
+{% for key, value in tags.items() %}
+  {{ key }}: "{{ value }}"
+{% endfor %}

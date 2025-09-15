@@ -25,9 +25,11 @@ include:
 # Sync local files to workspace
 sync:
   include:
-    - "deploy_metric_views.py"
-    - "dabs_src/**"
+    - "simple_deploy_metric_views.py"
     - "view_definitions/**"
+    - "scripts/**"
+    - "config/**"
+    - "tests/**"
 
 targets:
   dev:

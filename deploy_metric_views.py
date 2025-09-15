@@ -11,173 +11,219 @@ import argparse
 from pathlib import Path
 from databricks.sdk import WorkspaceClient
 
+
 def load_yaml_files(views_dir: Path):
     """Load all YAML files from the views directory."""
-    yaml_files = list(views_dir.glob('*.yml')) + list(views_dir.glob('*.yaml'))
-    
+    yaml_files = list(views_dir.glob("*.yml")) + list(views_dir.glob("*.yaml"))
+
     print(f"📂 Found {len(yaml_files)} YAML files in {views_dir}")
-    
+
     metric_views = {}
     for yaml_file in yaml_files:
         try:
-            with open(yaml_file, 'r') as f:
+            with open(yaml_file, "r") as f:
                 content = yaml.safe_load(f)
-            
+
             view_name = yaml_file.stem
             metric_views[view_name] = content
             print(f"✅ Loaded {view_name}")
-            
+
         except Exception as e:
             print(f"❌ Failed to load {yaml_file}: {e}")
             return None
-    
+
     return metric_views
+
 
 def extract_columns(view_content):
     """Extract column names from dimensions and measures."""
     columns = []
-    
-    if 'dimensions' in view_content:
-        columns.extend([dim['name'] for dim in view_content['dimensions'] if 'name' in dim])
-    
-    if 'measures' in view_content:
-        columns.extend([measure['name'] for measure in view_content['measures'] if 'name' in measure])
-    
+
+    if "dimensions" in view_content:
+        columns.extend(
+            [dim["name"] for dim in view_content["dimensions"] if "name" in dim]
+        )
+
+    if "measures" in view_content:
+        columns.extend(
+            [
+                measure["name"]
+                for measure in view_content["measures"]
+                if "name" in measure
+            ]
+        )
+
     return columns
+
 
 def generate_metric_view_ddl(view_name, view_content, catalog, schema):
     """Generate DDL for a metric view."""
     columns = extract_columns(view_content)
     column_list = ", ".join(f"`{col}`" for col in columns)
     qualified_view = f"`{catalog}`.`{schema}`.`{view_name}`"
-    
+
     # Convert view content back to YAML string for DDL
     yaml_content = yaml.dump(view_content, default_flow_style=False)
-    
+
     ddl = f"""CREATE OR REPLACE VIEW {qualified_view} (
   {column_list}
 ) WITH METRICS LANGUAGE YAML AS
 $$
 {yaml_content}
 $$"""
-    
+
     return ddl
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Simplified Databricks Metric Views Deployment")
+    parser = argparse.ArgumentParser(
+        description="Simplified Databricks Metric Views Deployment"
+    )
     parser.add_argument("--environment", default="dev", help="Target environment")
     parser.add_argument("--catalog", default="efeld_cuj", help="Catalog name")
     parser.add_argument("--schema", default="exercises", help="Schema name")
-    parser.add_argument("--warehouse-id", default="4b9b953939869799", help="SQL Warehouse ID")
-    parser.add_argument("--views-dir", default="view_definitions", help="Directory containing view definitions")
+    parser.add_argument(
+        "--warehouse-id", default="4b9b953939869799", help="SQL Warehouse ID"
+    )
+    parser.add_argument(
+        "--views-dir",
+        default="view_definitions",
+        help="Directory containing view definitions",
+    )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
-    
+
     args = parser.parse_args()
-    
+
     print(f"🚀 === Simple Metric Views Deployment ===")
     print(f"🎯 Environment: {args.environment}")
     print(f"📊 Target: {args.catalog}.{args.schema}")
     print(f"🏭 Warehouse: {args.warehouse_id}")
     print(f"📁 Views Directory: {args.views_dir}")
-    
+
     try:
         # Initialize Databricks client
         workspace_client = WorkspaceClient()
-        
+
         # Load YAML files
         views_dir = Path(args.views_dir)
         if not views_dir.exists():
             print(f"❌ Directory {views_dir} does not exist")
             return False
-        
+
         metric_views = load_yaml_files(views_dir)
         if not metric_views:
             print(f"❌ No valid metric views found")
             return False
-        
+
         print(f"\n📦 === Deploying {len(metric_views)} Metric Views ===")
-        
+
         success_count = 0
         for view_name, view_content in metric_views.items():
             try:
                 print(f"🔄 Deploying {view_name}...")
-                
+
                 # Generate DDL
-                ddl = generate_metric_view_ddl(view_name, view_content, args.catalog, args.schema)
-                
+                ddl = generate_metric_view_ddl(
+                    view_name, view_content, args.catalog, args.schema
+                )
+
                 if args.verbose:
                     print(f"📄 Generated DDL for {view_name}:")
                     print(ddl)
                     print("-" * 50)
-                
+
                 # Execute DDL
                 response = workspace_client.statement_execution.execute_statement(
                     warehouse_id=args.warehouse_id,
                     statement=ddl,
                     catalog=args.catalog,
                     schema=args.schema,
-                    wait_timeout="30s"
+                    wait_timeout="30s",
                 )
-                
+
                 # Wait for completion
-                while response.status.state.value not in ("SUCCEEDED", "FAILED", "CANCELED"):
+                while response.status.state.value not in (
+                    "SUCCEEDED",
+                    "FAILED",
+                    "CANCELED",
+                ):
                     import time
+
                     time.sleep(1)
-                    response = workspace_client.statement_execution.get_statement(response.statement_id)
-                
+                    response = workspace_client.statement_execution.get_statement(
+                        response.statement_id
+                    )
+
                 if response.status.state.value == "SUCCEEDED":
                     print(f"✅ {view_name} deployed successfully")
                     success_count += 1
-                    
+
                     # Try to apply tags
                     try:
-                        qualified_view = f"`{args.catalog}`.`{args.schema}`.`{view_name}`"
-                        tag_sql = f"ALTER TABLE {qualified_view} SET TAGS ('system.Certified')"
-                        
-                        tag_response = workspace_client.statement_execution.execute_statement(
-                            warehouse_id=args.warehouse_id,
-                            statement=tag_sql,
-                            catalog=args.catalog,
-                            schema=args.schema,
-                            wait_timeout="30s"
+                        qualified_view = (
+                            f"`{args.catalog}`.`{args.schema}`.`{view_name}`"
                         )
-                        
+                        tag_sql = f"ALTER TABLE {qualified_view} SET TAGS ('system.Certified')"
+
+                        tag_response = (
+                            workspace_client.statement_execution.execute_statement(
+                                warehouse_id=args.warehouse_id,
+                                statement=tag_sql,
+                                catalog=args.catalog,
+                                schema=args.schema,
+                                wait_timeout="30s",
+                            )
+                        )
+
                         # Wait for tag completion
-                        while tag_response.status.state.value not in ("SUCCEEDED", "FAILED", "CANCELED"):
+                        while tag_response.status.state.value not in (
+                            "SUCCEEDED",
+                            "FAILED",
+                            "CANCELED",
+                        ):
                             import time
+
                             time.sleep(1)
-                            tag_response = workspace_client.statement_execution.get_statement(tag_response.statement_id)
-                        
+                            tag_response = (
+                                workspace_client.statement_execution.get_statement(
+                                    tag_response.statement_id
+                                )
+                            )
+
                         if tag_response.status.state.value == "SUCCEEDED":
                             print(f"🏷️ {view_name} tagged successfully")
                         else:
-                            print(f"⚠️ Failed to tag {view_name}: {tag_response.status.error}")
-                    
+                            print(
+                                f"⚠️ Failed to tag {view_name}: {tag_response.status.error}"
+                            )
+
                     except Exception as tag_error:
                         print(f"⚠️ Failed to tag {view_name}: {str(tag_error)}")
-                
+
                 else:
                     error_msg = response.status.error or "Unknown error"
                     print(f"❌ Failed to deploy {view_name}: {error_msg}")
-                
+
             except Exception as e:
                 print(f"❌ Error deploying {view_name}: {str(e)}")
-        
+
         print(f"\n🎉 === Deployment Summary ===")
         print(f"✅ Successfully deployed: {success_count}/{len(metric_views)} views")
-        
+
         if success_count == len(metric_views):
             print(f"🎊 All metric views deployed successfully!")
             return True
         else:
             print(f"⚠️ Some deployments failed - check logs above")
             return False
-            
+
     except Exception as e:
         print(f"💥 Fatal error: {str(e)}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 if __name__ == "__main__":
     success = main()

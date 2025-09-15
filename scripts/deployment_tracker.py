@@ -264,9 +264,7 @@ def main():
     )
 
     # Status command
-    subparsers.add_parser(
-        "status", help="Show current deployment status"
-    )
+    subparsers.add_parser("status", help="Show current deployment status")
 
     args = parser.parse_args()
     tracker = DeploymentTracker()

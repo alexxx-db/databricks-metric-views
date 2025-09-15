@@ -17,7 +17,7 @@ class EnvironmentManager:
     def __init__(self, config_path: str = "config/environments.yml"):
         # Handle different working directory contexts (local vs Databricks workspace)
         self.config_path = Path(config_path)
-        
+
         # If the default path doesn't exist, try alternative paths
         if not self.config_path.exists():
             # Try alternative paths without using __file__
@@ -25,7 +25,7 @@ class EnvironmentManager:
                 Path.cwd() / config_path,
                 Path("../") / config_path,  # Try one level up
             ]
-            
+
             for alt_path in alt_paths:
                 if alt_path.exists():
                     self.config_path = alt_path
@@ -72,11 +72,11 @@ class EnvironmentManager:
     def get_template_context(self, environment: str) -> Dict[str, Any]:
         """Get template context with both merged config and separate global namespace."""
         env_config = self.get_environment_config(environment)
-        
+
         # Add separate global namespace for template access
         if "global" in self.config:
             env_config["global"] = self.config["global"]
-            
+
         return env_config
 
     def list_environments(self) -> list[str]:

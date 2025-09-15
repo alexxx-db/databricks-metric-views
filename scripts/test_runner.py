@@ -12,9 +12,7 @@ from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 from databricks.sdk import WorkspaceClient
 import databricks.sql as sql
-import pandas as pd
 from databricks.sdk.core import Config
-import yaml
 import time
 import traceback
 
@@ -91,14 +89,14 @@ class MetricViewTester:
                 http_path=f"/sql/1.0/warehouses/{self.warehouse_id}",
                 credentials_provider=lambda: cfg.authenticate,
             ) as connection:
-                print(f"✅ Debug: Connection established successfully")
+                print("✅ Debug: Connection established successfully")
 
                 with connection.cursor() as cursor:
-                    print(f"🔍 Debug: Executing query...")
+                    print("🔍 Debug: Executing query...")
                     # Use fully qualified table names in the query instead of setting catalog/schema in connection
                     cursor.execute(sql_query)
 
-                    print(f"🔍 Debug: Fetching results...")
+                    print("🔍 Debug: Fetching results...")
                     # Use fetchall_arrow().to_pandas() to get proper column names
                     df = cursor.fetchall_arrow().to_pandas()
 
@@ -366,7 +364,7 @@ class MetricViewTester:
         self, environment: str, view_names: Optional[List[str]] = None
     ) -> Dict[str, List[TestResult]]:
         """Run tests for all views or specific views."""
-        print(f"🧪 === Running Metric View Tests ===")
+        print("🧪 === Running Metric View Tests ===")
         print(f"🎯 Environment: {environment}")
         print(f"📊 Target: {self.catalog}.{self.schema}")
 
@@ -389,7 +387,7 @@ class MetricViewTester:
                     if current_file and current_file != "<stdin>":
                         script_dir = Path(current_file).parent.parent
                         test_paths.append(script_dir / "tests")
-            except:
+            except Exception:
                 pass
 
             view_names = []
@@ -442,7 +440,7 @@ class MetricViewTester:
         )
         failed_tests = total_tests - passed_tests
 
-        print(f"\n📊 === Test Summary ===")
+        print("\n📊 === Test Summary ===")
         print(f"✅ Passed: {passed_tests}/{total_tests}")
         print(f"❌ Failed: {failed_tests}/{total_tests}")
         print(

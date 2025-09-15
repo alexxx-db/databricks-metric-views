@@ -6,8 +6,8 @@ Environment configuration management with Jinja2 templating support.
 import yaml
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional
-from jinja2 import Environment, FileSystemLoader, Template, TemplateError
+from typing import Dict, Any
+from jinja2 import Environment, FileSystemLoader, TemplateError, StrictUndefined
 import argparse
 
 
@@ -15,11 +15,25 @@ class EnvironmentManager:
     """Manages environment-specific configuration and templating."""
 
     def __init__(self, config_path: str = "config/environments.yml"):
+        # Handle different working directory contexts (local vs Databricks workspace)
         self.config_path = Path(config_path)
+
+        # If the default path doesn't exist, try alternative paths
+        if not self.config_path.exists():
+            # Try alternative paths without using __file__
+            alt_paths = [
+                Path.cwd() / config_path,
+                Path("../") / config_path,  # Try one level up
+            ]
+
+            for alt_path in alt_paths:
+                if alt_path.exists():
+                    self.config_path = alt_path
+                    break
         self._config = None
         self._jinja_env = Environment(
             loader=FileSystemLoader([".", "view_definitions"]),
-            undefined="strict",  # Fail on undefined variables
+            undefined=StrictUndefined,  # Fail on undefined variables
         )
 
     @property
@@ -102,7 +116,7 @@ class EnvironmentManager:
             try:
                 rendered_content = self.render_template_string(content, env_config)
                 return yaml.safe_load(rendered_content)
-            except:
+            except Exception:
                 # If template rendering fails, try loading as regular YAML
                 return yaml.safe_load(content)
 
@@ -140,7 +154,7 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # List environments
-    list_parser = subparsers.add_parser("list", help="List available environments")
+    subparsers.add_parser("list", help="List available environments")
 
     # Show environment config
     show_parser = subparsers.add_parser("show", help="Show environment configuration")
@@ -220,7 +234,7 @@ def main():
 
             # Try to parse as YAML to validate structure
             try:
-                parsed = yaml.safe_load(rendered)
+                yaml.safe_load(rendered)
                 print("\n✅ Rendered output is valid YAML")
             except yaml.YAMLError as e:
                 print(f"\n⚠️  Warning: Rendered output is not valid YAML: {e}")

@@ -77,7 +77,6 @@ class MetricViewValidator:
         warnings = []
 
         # Basic SQL expression validation (can be enhanced with actual SQL parsing)
-        sql_keywords = ["SELECT", "FROM", "WHERE", "GROUP BY", "ORDER BY", "HAVING"]
         dangerous_keywords = ["DROP", "DELETE", "TRUNCATE", "ALTER"]
 
         expressions_to_check = []
@@ -181,6 +180,16 @@ class MetricViewValidator:
 
     def validate_file(self, file_path: Path) -> ValidationResult:
         """Validate a single YAML file."""
+
+        # Skip Jinja2 template files - they should be validated after rendering
+        if file_path.suffix == ".j2":
+            return ValidationResult(
+                True,
+                [],
+                ["Skipped Jinja2 template file - should be validated after rendering"],
+                str(file_path),
+            )
+
         try:
             with open(file_path, "r") as f:
                 yaml_content = yaml.safe_load(f)
@@ -194,7 +203,7 @@ class MetricViewValidator:
             )
 
         if yaml_content is None:
-            return ValidationResult(False, [f"Empty YAML file"], [], str(file_path))
+            return ValidationResult(False, ["Empty YAML file"], [], str(file_path))
 
         # Run all validation checks
         structure_result = self.validate_yaml_structure(yaml_content)

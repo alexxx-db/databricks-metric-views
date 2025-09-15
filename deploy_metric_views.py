@@ -4,8 +4,6 @@ Simplified metric views deployment script for debugging.
 This version removes advanced features to isolate core deployment issues.
 """
 
-import os
-import sys
 import yaml
 import argparse
 from pathlib import Path
@@ -94,7 +92,7 @@ def main():
 
     args = parser.parse_args()
 
-    print(f"🚀 === Simple Metric Views Deployment ===")
+    print("🚀 === Simple Metric Views Deployment ===")
     print(f"🎯 Environment: {args.environment}")
     print(f"📊 Target: {args.catalog}.{args.schema}")
     print(f"🏭 Warehouse: {args.warehouse_id}")
@@ -112,7 +110,7 @@ def main():
 
         metric_views = load_yaml_files(views_dir)
         if not metric_views:
-            print(f"❌ No valid metric views found")
+            print("❌ No valid metric views found")
             return False
 
         print(f"\n📦 === Deploying {len(metric_views)} Metric Views ===")
@@ -207,14 +205,14 @@ def main():
             except Exception as e:
                 print(f"❌ Error deploying {view_name}: {str(e)}")
 
-        print(f"\n🎉 === Deployment Summary ===")
+        print("\n🎉 === Deployment Summary ===")
         print(f"✅ Successfully deployed: {success_count}/{len(metric_views)} views")
 
         if success_count == len(metric_views):
-            print(f"🎊 All metric views deployed successfully!")
+            print("🎊 All metric views deployed successfully!")
             return True
         else:
-            print(f"⚠️ Some deployments failed - check logs above")
+            print("⚠️ Some deployments failed - check logs above")
             return False
 
     except Exception as e:

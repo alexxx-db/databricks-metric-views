@@ -7,7 +7,7 @@ import json
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import List, Optional
 from dataclasses import dataclass, asdict
 import argparse
 
@@ -140,7 +140,7 @@ class DeploymentTracker:
             else 0
         )
 
-        print(f"\n🏁 === Deployment Complete ===")
+        print("\n🏁 === Deployment Complete ===")
         print(f"⏱️  Duration: {self.current_summary.duration_seconds:.2f} seconds")
         print(f"✅ Successful: {self.current_summary.successful_deployments}")
         print(f"❌ Failed: {self.current_summary.failed_deployments}")
@@ -264,7 +264,7 @@ def main():
     )
 
     # Status command
-    status_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "status", help="Show current deployment status"
     )
 
@@ -335,7 +335,7 @@ def main():
             print("📭 No deployment records found")
             return
 
-        print(f"\n📊 === Latest Deployment Status ===")
+        print("\n📊 === Latest Deployment Status ===")
         print(f"🎯 Environment: {summary.target_environment}")
         print(f"🔢 Deployment ID: {summary.deployment_id}")
         print(f"⏰ Start Time: {summary.start_time}")
@@ -346,14 +346,14 @@ def main():
                 if summary.total_files > 0
                 else 0
             )
-            print(f"🏁 Status: Complete")
+            print("🏁 Status: Complete")
             print(
                 f"✅ Successful: {summary.successful_deployments}/{summary.total_files}"
             )
             print(f"❌ Failed: {summary.failed_deployments}/{summary.total_files}")
             print(f"📈 Success Rate: {success_rate:.1f}%")
         else:
-            print(f"🔄 Status: In Progress...")
+            print("🔄 Status: In Progress...")
 
     else:
         parser.print_help()

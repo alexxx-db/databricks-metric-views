@@ -186,7 +186,7 @@ class MetricViewValidator:
             return ValidationResult(
                 True,
                 [],
-                ["Skipped Jinja2 template file - should be validated after rendering"],
+                [],
                 str(file_path),
             )
 
@@ -249,7 +249,11 @@ def main():
         print(f"❌ Directory {yaml_dir} does not exist")
         sys.exit(1)
 
-    yaml_files = list(yaml_dir.glob("*.yml")) + list(yaml_dir.glob("*.yaml"))
+    yaml_files = (
+        list(yaml_dir.glob("*.yml"))
+        + list(yaml_dir.glob("*.yaml"))
+        + list(yaml_dir.glob("*.j2"))
+    )
 
     if not yaml_files:
         print(f"⚠️ No YAML files found in {yaml_dir}")
@@ -286,7 +290,7 @@ def main():
         }
         print(json.dumps(output, indent=2))
     else:
-        print(f"\n🔍 === Metric View Validation Results ===")
+        print("\n🔍 === Metric View Validation Results ===")
         print(f"📄 Files validated: {len(yaml_files)}")
 
         for result in all_results:
@@ -310,10 +314,10 @@ def main():
                     print(f"    • {warning}")
 
     if has_errors:
-        print(f"\n❌ Validation failed with errors")
+        print("\n❌ Validation failed with errors")
         sys.exit(1)
     else:
-        print(f"\n✅ All validations passed!")
+        print("\n✅ All validations passed!")
         sys.exit(0)
 
 

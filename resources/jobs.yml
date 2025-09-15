@@ -8,7 +8,7 @@ resources:
         # Deploy metric views using uploaded Python file with serverless compute
         - task_key: "deploy_metric_views"
           spark_python_task:
-            python_file: "${workspace.file_path}/simple_deploy_metric_views.py"
+            python_file: "${workspace.file_path}/deploy_metric_views.py"
             parameters:
               - "--environment"
               - "${var.environment}"

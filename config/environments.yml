@@ -50,6 +50,11 @@ global:
     security_level: "restricted"
     refresh_policy: "on_demand"
   
+  # Date filters for templated views
+  date_filters:
+    min_date: "1990-01-01"
+    max_date: "2030-12-31"
+  
   # Common dimensions that can be referenced across metric views
   common_dimensions:
     date_dimensions:

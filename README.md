@@ -24,7 +24,7 @@ The system uses a **hybrid approach**:
 ```
 metric_views/
 ├── databricks.yml                     # DABs bundle configuration
-├── simple_deploy_metric_views.py     # Core deployment script (working)
+├── deploy_metric_views.py     # Core deployment script (working)
 ├── resources/
 │   └── jobs.yml                      # Serverless job with deployment + testing tasks
 ├── config/
@@ -90,7 +90,7 @@ The working pipeline produces the following output:
 ```
 =======
 Task deploy_metric_views:
-🚀 === Simple Metric Views Deployment ===
+🚀 === Metric Views Deployment ===
 🎯 Environment: dev
 📊 Target: efeld_cuj.exercises
 🏭 Warehouse: 4b9b953939869799
@@ -152,7 +152,7 @@ variables:
 # Sync configuration to ensure all files are uploaded
 sync:
   paths:
-    - "./simple_deploy_metric_views.py"
+    - "./deploy_metric_views.py"
     - "./view_definitions/**"
     - "./scripts/**"
     - "./config/**"
@@ -171,7 +171,7 @@ resources:
         # Deploy metric views using serverless compute
         - task_key: "deploy_metric_views"
           spark_python_task:
-            python_file: "${workspace.file_path}/simple_deploy_metric_views.py"
+            python_file: "${workspace.file_path}/deploy_metric_views.py"
             parameters:
               - "--environment"
               - "${var.environment}"

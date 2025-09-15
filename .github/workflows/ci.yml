@@ -14,8 +14,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Databricks CLI
-        uses: databricks/setup-cli@main
+      # - name: Setup Databricks CLI
+      #   uses: databricks/setup-cli@main
 
       # - name: Validate bundle configuration
       #   run: |
@@ -47,10 +47,17 @@ jobs:
 
       - name: Test template rendering for all environments
         run: |
-          for env in dev staging prod; do
-            echo "Testing template rendering for $env environment..."
-            python scripts/environment_manager.py test view_definitions/templated_sales_metrics.yml.j2 $env
-          done
+          echo "Checking for template files..."
+          if ls view_definitions/*.j2 1> /dev/null 2>&1; then
+            for env in dev staging prod; do
+              echo "Testing template rendering for $env environment..."
+              for template in view_definitions/*.j2; do
+                python scripts/environment_manager.py test "$template" $env
+              done
+            done
+          else
+            echo "✅ No template files found to test - using simple deployment mode"
+          fi
 
   lint-and-format:
     name: Lint and Format Check

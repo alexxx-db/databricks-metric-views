@@ -17,7 +17,7 @@ class EnvironmentManager:
     def __init__(self, config_path: str = "config/environments.yml"):
         # Handle different working directory contexts (local vs Databricks workspace)
         self.config_path = Path(config_path)
-
+        
         # If the default path doesn't exist, try alternative paths
         if not self.config_path.exists():
             # Try alternative paths without using __file__
@@ -25,7 +25,7 @@ class EnvironmentManager:
                 Path.cwd() / config_path,
                 Path("../") / config_path,  # Try one level up
             ]
-
+            
             for alt_path in alt_paths:
                 if alt_path.exists():
                     self.config_path = alt_path
@@ -69,6 +69,16 @@ class EnvironmentManager:
         env_config.update(self.config[environment])
         return env_config
 
+    def get_template_context(self, environment: str) -> Dict[str, Any]:
+        """Get template context with both merged config and separate global namespace."""
+        env_config = self.get_environment_config(environment)
+        
+        # Add separate global namespace for template access
+        if "global" in self.config:
+            env_config["global"] = self.config["global"]
+            
+        return env_config
+
     def list_environments(self) -> list[str]:
         """List all available environments."""
         return [env for env in self.config.keys() if env != "global"]
@@ -104,8 +114,9 @@ class EnvironmentManager:
         if yaml_path.suffix in [".j2", ".jinja2"] or yaml_path.name.endswith(
             ".yaml.j2"
         ):
-            # Render template
-            rendered_yaml = self.render_template_file(yaml_path, env_config)
+            # Use template context that includes separate global namespace
+            template_context = self.get_template_context(environment)
+            rendered_yaml = self.render_template_file(yaml_path, template_context)
             return yaml.safe_load(rendered_yaml)
         else:
             # Regular YAML file, load as-is but still substitute variables if they exist
@@ -223,8 +234,8 @@ def main():
                 print(f"❌ Template file not found: {template_path}")
                 exit(1)
 
-            config = manager.get_environment_config(args.environment)
-            rendered = manager.render_template_file(template_path, config)
+            template_context = manager.get_template_context(args.environment)
+            rendered = manager.render_template_file(template_path, template_context)
 
             print(
                 f"✅ Template rendered successfully for environment '{args.environment}':"

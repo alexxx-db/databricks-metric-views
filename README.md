@@ -8,7 +8,7 @@ This repository contains a fully functional CI/CD pipeline that:
 - ✅ **Deploys metric views** from YAML files to Unity Catalog using serverless compute
 - ✅ **Multi-destination deployment** - different views can target different catalogs/schemas
 - ✅ **Runs automated tests** with 100% success rate (5/5 tests passing)
-- ✅ **Handles environment-specific configurations** via Jinja2 templating
+- ✅ **Dynamic templating** with Jinja2 for environment-specific configurations
 - ✅ **Provides comprehensive error handling** with proper task failure reporting
 - ✅ **Uses optimal SQL connection patterns** following Databricks best practices
 
@@ -37,7 +37,8 @@ metric_views/
 ├── view_definitions/                 # Metric view definitions
 │   ├── sample_metric_view.yaml     # Basic example view (default destination)
 │   ├── another_metric_view.yaml    # Additional example view (default destination)
-│   └── analytics_metric_view.yaml  # Multi-destination example (custom catalog/schema)
+│   ├── analytics_metric_view.yaml  # Multi-destination example (custom catalog/schema)
+│   └── templated_sales_metrics.yml.j2  # Jinja2 template example (dynamic configuration)
 ├── tests/                           # Automated test suite (working)
 │   ├── test_sample_metric_view.sql # SQL test queries
 │   └── expected_results/
@@ -106,6 +107,175 @@ measures:
 **Environment Separation:**
 - **Production views**: `catalog: main, schema: metrics`
 - **Development/staging**: Uses environment defaults from `config/environments.yml`
+- **Dynamic Templates**: Use Jinja2 templates for environment-specific logic
+
+## 🎨 **Jinja2 Templating**
+
+**ADVANCED FEATURE**: Use Jinja2 templates (`.yml.j2` files) for dynamic, environment-specific metric view generation with shared configuration patterns.
+
+### Template Processing Flow:
+1. **Template Discovery**: System detects `.yml.j2` and `.yaml.j2` files
+2. **Environment Loading**: Loads variables from `config/environments.yml`
+3. **Template Rendering**: Processes Jinja2 syntax with environment context
+4. **DDL Generation**: Renders final YAML and generates clean DDL
+5. **Deployment**: Deploys to target catalog/schema
+
+### Example: Templated Metric View
+
+**Template File** (`view_definitions/templated_sales_metrics.yml.j2`):
+```yaml
+# Dynamic configuration based on environment
+version: "0.1"
+
+{% if environment == 'prod' %}
+deployment:
+  catalog: "main"
+  schema: "metrics"
+{% else %}
+deployment:
+  catalog: "{{ catalog }}"
+  schema: "{{ environment }}_metrics"
+{% endif %}
+
+# Environment-specific source tables
+source: {{ data_sources.fact_orders }}
+
+# Global date filters
+filter: order_date > '{{ global.date_filters.min_date }}'
+
+dimensions:
+  - name: Order Month
+    expr: DATE_TRUNC('MONTH', order_date)
+  - name: Region
+    expr: customer_region
+
+measures:
+  - name: Total Revenue
+    expr: SUM(order_amount)
+  - name: Order Count
+    expr: COUNT(*)
+
+# Environment-specific tags
+tags:
+{% for key, value in tags.items() %}
+  {{ key }}: "{{ value }}"
+{% endfor %}
+
+# Production-only joins
+{% if environment == 'prod' %}
+joins:
+  - type: LEFT
+    source: {{ data_sources.dim_customers }}
+    condition: customer_id = customers.id
+{% endif %}
+```
+
+### Template Variables Available:
+
+**Environment Context:**
+```yaml
+# From CLI/job parameters
+environment: "dev|staging|prod"
+catalog: "efeld_cuj" 
+schema: "exercises"
+warehouse_id: "4b9b953939869799"
+
+# From config/environments.yml - Environment-specific
+tags:
+  Environment: "dev"
+  DataSource: "dev_pipeline"
+  Owner: "data-engineering-team"
+
+data_sources:
+  fact_orders: "efeld_cuj.exercises.turbine_current_status"
+  dim_customers: "efeld_cuj.exercises.customer_data"
+  dim_products: "efeld_cuj.exercises.product_catalog"
+
+# From config/environments.yml - Global namespace
+global:
+  view_options:
+    security_level: "restricted"
+    refresh_policy: "on_demand"
+  date_filters:
+    min_date: "1990-01-01"
+    max_date: "2030-12-31"
+  common_dimensions: [...]
+  common_measures: [...]
+```
+
+### Template Rendering Results:
+
+**Development Environment** (`--environment dev`):
+```yaml
+version: "0.1"
+deployment:
+  catalog: "efeld_cuj"
+  schema: "dev_metrics"
+source: "efeld_cuj.exercises.turbine_current_status"
+filter: order_date > '1990-01-01'
+tags:
+  Environment: "dev"
+  DataSource: "dev_pipeline"
+  Owner: "data-engineering-team"
+# No joins in dev
+```
+
+**Production Environment** (`--environment prod`):
+```yaml
+version: "0.1"
+deployment:
+  catalog: "main"
+  schema: "metrics"
+source: "efeld_cuj.prod.turbine_current_status"
+filter: order_date > '1990-01-01'
+tags:
+  Environment: "prod"
+  DataSource: "prod_pipeline"
+  Owner: "analytics-team"
+  Certified: "true"
+joins:
+  - type: LEFT
+    source: "efeld_cuj.prod.customer_data"
+    condition: customer_id = customers.id
+```
+
+### When to Use Templates:
+
+**✅ Use Jinja2 Templates When:**
+- Different environments need different table sources
+- Complex conditional logic based on environment
+- Shared configuration patterns across multiple views
+- Dynamic tag/metadata application
+- Environment-specific joins or filters
+
+**❌ Use Regular YAML When:**
+- Simple, static metric definitions
+- Same logic across all environments
+- No conditional behavior needed
+- Rapid prototyping
+
+### Template Testing:
+
+```bash
+# Test template rendering for all environments
+python scripts/environment_manager.py test view_definitions/templated_sales_metrics.yml.j2 dev
+python scripts/environment_manager.py test view_definitions/templated_sales_metrics.yml.j2 prod
+
+# Deploy templated views (templates automatically detected and processed)
+python simple_deploy_metric_views.py --dry-run --verbose
+
+# Results show templates processed:
+# 📂 Found 4 YAML files in view_definitions  ← Includes .j2 files
+# ✅ Loaded templated_sales_metrics.yml      ← Template rendered
+```
+
+### Template Best Practices:
+
+1. **Environment Conditionals**: Use `{% if environment == 'prod' %}` for environment-specific logic
+2. **Global Variables**: Access shared config via `{{ global.date_filters.min_date }}`
+3. **Safe Defaults**: Always provide fallbacks for optional variables
+4. **Clear Naming**: Use `.yml.j2` extension to indicate templates
+5. **Documentation**: Comment template logic for team understanding
 
 ## 🚀 **Quick Start**
 
@@ -378,15 +548,15 @@ prod:
 
 ### Manual Deployment
 ```bash
-# Deploy to development (supports multi-destination)
+# Deploy to development (supports multi-destination + templates)
 databricks bundle deploy --target dev
 databricks bundle run metric_views_deployment --target dev
 
-# Deploy to production (supports multi-destination)  
+# Deploy to production (supports multi-destination + templates)  
 databricks bundle deploy --target prod
 databricks bundle run metric_views_deployment --target prod
 
-# Test multi-destination deployment locally
+# Test multi-destination deployment with templates locally
 python simple_deploy_metric_views.py --dry-run --verbose
 ```
 
@@ -414,13 +584,19 @@ python scripts/test_runner.py --environment dev --views sample_metric_view
 python scripts/test_runner.py --environment prod --catalog analytics_prod --schema customer_metrics
 ```
 
-### Environment Management
+### Environment Management & Templating
 ```bash
 # Show environment configuration
 python scripts/environment_manager.py show dev
 
-# Test template rendering
-python scripts/environment_manager.py test view_definitions/template.yml.j2 prod
+# Test Jinja2 template rendering  
+python scripts/environment_manager.py test view_definitions/templated_sales_metrics.yml.j2 prod
+
+# Validate all environments
+python scripts/environment_manager.py validate
+
+# List available environments
+python scripts/environment_manager.py list
 ```
 
 ## 🚨 **Troubleshooting**

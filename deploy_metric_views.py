@@ -8,21 +8,44 @@ import yaml
 import argparse
 from pathlib import Path
 from databricks.sdk import WorkspaceClient
+import sys
+
+# Add scripts directory to path for imports
+sys.path.append("scripts")
+from environment_manager import EnvironmentManager
 
 
 def load_yaml_files(views_dir: Path):
     """Load all YAML files from the views directory."""
-    yaml_files = list(views_dir.glob("*.yml")) + list(views_dir.glob("*.yaml"))
+    yaml_files = (
+        list(views_dir.glob("*.yml"))
+        + list(views_dir.glob("*.yaml"))
+        + list(views_dir.glob("*.yml.j2"))
+        + list(views_dir.glob("*.yaml.j2"))
+    )
 
     print(f"📂 Found {len(yaml_files)} YAML files in {views_dir}")
 
     metric_views = {}
+    env_manager = EnvironmentManager()
+
     for yaml_file in yaml_files:
         try:
-            with open(yaml_file, "r") as f:
-                content = yaml.safe_load(f)
+            # Handle template files (.j2)
+            if yaml_file.suffix in [".j2"] or yaml_file.name.endswith(".yaml.j2"):
+                # Process as template
+                content = env_manager.process_metric_view_file(
+                    yaml_file, "dev"
+                )  # Use dev as default
+                view_name = yaml_file.stem
+                if view_name.endswith(".j2"):
+                    view_name = view_name[:-3]  # Remove .j2 extension
+            else:
+                # Process as regular YAML
+                with open(yaml_file, "r") as f:
+                    content = yaml.safe_load(f)
+                view_name = yaml_file.stem
 
-            view_name = yaml_file.stem
             metric_views[view_name] = content
             print(f"✅ Loaded {view_name}")
 

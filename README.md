@@ -6,6 +6,7 @@ A production-ready solution for deploying metric views to Databricks Unity Catal
 
 This repository contains a fully functional CI/CD pipeline that:
 - ✅ **Deploys metric views** from YAML files to Unity Catalog using serverless compute
+- ✅ **Multi-destination deployment** - different views can target different catalogs/schemas
 - ✅ **Runs automated tests** with 100% success rate (5/5 tests passing)
 - ✅ **Handles environment-specific configurations** via Jinja2 templating
 - ✅ **Provides comprehensive error handling** with proper task failure reporting
@@ -24,7 +25,7 @@ The system uses a **hybrid approach**:
 ```
 metric_views/
 ├── databricks.yml                     # DABs bundle configuration
-├── deploy_metric_views.py     # Core deployment script (working)
+├── simple_deploy_metric_views.py     # Core deployment script (working)
 ├── resources/
 │   └── jobs.yml                      # Serverless job with deployment + testing tasks
 ├── config/
@@ -34,8 +35,9 @@ metric_views/
 │   ├── environment_manager.py       # Environment configuration management
 │   └── validate_yaml.py             # YAML validation
 ├── view_definitions/                 # Metric view definitions
-│   ├── sample_metric_view.yaml     # Working example view
-│   └── another_metric_view.yaml    # Additional example view
+│   ├── sample_metric_view.yaml     # Basic example view (default destination)
+│   ├── another_metric_view.yaml    # Additional example view (default destination)
+│   └── analytics_metric_view.yaml  # Multi-destination example (custom catalog/schema)
 ├── tests/                           # Automated test suite (working)
 │   ├── test_sample_metric_view.sql # SQL test queries
 │   └── expected_results/
@@ -45,6 +47,65 @@ metric_views/
 │   └── deploy-metric-views.yml     # Continuous Deployment
 └── README.md
 ```
+
+## 🎯 **Multi-Destination Deployment**
+
+**NEW FEATURE**: Individual metric views can now specify their own target catalog and schema, enabling multi-tenant and cross-domain deployments in a single pipeline run.
+
+### Example: Environment Defaults
+```yaml
+# sample_metric_view.yaml (deploys to environment defaults)
+version: "0.1"
+source: efeld_cuj.exercises.turbine_current_status
+dimensions:
+  - name: turbine_id
+    expr: turbine_id
+measures:
+  - name: pct_ok
+    expr: round(sum(case when prediction = 'ok' then 1 else 0 end) / count(*), 2)
+# No deployment section = uses CLI defaults (--catalog, --schema)
+```
+
+### Example: Custom Destination Override
+```yaml
+# analytics_metric_view.yaml (deploys to custom location)  
+version: "0.1"
+
+# Optional deployment override
+deployment:
+  catalog: "analytics_prod"
+  schema: "customer_metrics"
+
+source: efeld_cuj.exercises.turbine_current_status
+dimensions:
+  - name: turbine_id
+    expr: turbine_id
+measures:
+  - name: pct_ok
+    expr: round(sum(case when prediction = 'ok' then 1 else 0 end) / count(*), 2)
+```
+
+### Multi-Destination Deployment Results:
+```bash
+📦 === Deploying 3 Metric Views ===
+🔄 Deploying analytics_metric_view...
+   📍 Target override: analytics_prod.customer_metrics    ← Custom destination
+🔄 Deploying sample_metric_view...                        ← Environment default
+🔄 Deploying another_metric_view...                       ← Environment default
+
+✅ Successfully deployed: 3/3 views
+```
+
+### Enterprise Use Cases:
+
+**Multi-Team Deployment:**
+- **Team A (Analytics)**: `catalog: analytics_prod, schema: customer_metrics`
+- **Team B (Operations)**: `catalog: operations, schema: system_monitoring`  
+- **Team C (Finance)**: `catalog: finance, schema: revenue_tracking`
+
+**Environment Separation:**
+- **Production views**: `catalog: main, schema: metrics`
+- **Development/staging**: Uses environment defaults from `config/environments.yml`
 
 ## 🚀 **Quick Start**
 
@@ -90,7 +151,7 @@ The working pipeline produces the following output:
 ```
 =======
 Task deploy_metric_views:
-🚀 === Metric Views Deployment ===
+🚀 === Simple Metric Views Deployment ===
 🎯 Environment: dev
 📊 Target: efeld_cuj.exercises
 🏭 Warehouse: 4b9b953939869799
@@ -152,7 +213,7 @@ variables:
 # Sync configuration to ensure all files are uploaded
 sync:
   paths:
-    - "./deploy_metric_views.py"
+    - "./simple_deploy_metric_views.py"
     - "./view_definitions/**"
     - "./scripts/**"
     - "./config/**"
@@ -171,7 +232,7 @@ resources:
         # Deploy metric views using serverless compute
         - task_key: "deploy_metric_views"
           spark_python_task:
-            python_file: "${workspace.file_path}/deploy_metric_views.py"
+            python_file: "${workspace.file_path}/simple_deploy_metric_views.py"
             parameters:
               - "--environment"
               - "${var.environment}"
@@ -317,19 +378,40 @@ prod:
 
 ### Manual Deployment
 ```bash
-# Deploy to development
+# Deploy to development (supports multi-destination)
 databricks bundle deploy --target dev
 databricks bundle run metric_views_deployment --target dev
 
-# Deploy to production
+# Deploy to production (supports multi-destination)  
 databricks bundle deploy --target prod
 databricks bundle run metric_views_deployment --target prod
+
+# Test multi-destination deployment locally
+python simple_deploy_metric_views.py --dry-run --verbose
 ```
 
-### Testing Specific Views
+### Advanced Usage
+
+**Multi-Destination Deployment:**
 ```bash
-# Run tests for specific metric views
+# Deploy views to multiple catalogs/schemas in one run
+python simple_deploy_metric_views.py \
+  --catalog default_catalog \
+  --schema default_schema \
+  --warehouse-id 4b9b953939869799 \
+  --verbose
+
+# Test deployment without execution  
+python simple_deploy_metric_views.py --dry-run --verbose
+```
+
+**Testing Multi-Destination Views:**
+```bash
+# Run tests for specific metric views (tests follow the views to their destinations)
 python scripts/test_runner.py --environment dev --views sample_metric_view
+
+# Test views in custom catalogs (tests will query the correct catalog/schema)
+python scripts/test_runner.py --environment prod --catalog analytics_prod --schema customer_metrics
 ```
 
 ### Environment Management
@@ -361,6 +443,21 @@ python scripts/environment_manager.py test view_definitions/template.yml.j2 prod
 - ✅ **Solution**: Custom `TestException` class that properly fails the Databricks task
 - ❌ **Avoid**: Generic exceptions that get caught and reported as warnings
 
+**Multi-Destination Deployment Issues**:
+- ✅ **Solution**: Views with invalid `deployment.catalog` fail gracefully and continue with other views
+- ✅ **Solution**: Use `--dry-run` to test deployments before execution
+- ❌ **Avoid**: Specifying non-existent catalogs without testing first
+
+**Non-Existent Catalogs/Schemas**:
+- ❌ **Current Behavior**: Catalogs and schemas are NOT automatically created
+- ✅ **Solution**: Pre-create infrastructure via Terraform, SQL, or separate pipeline
+- ✅ **Error Handling**: Deployment fails gracefully with clear error messages:
+  ```bash
+  ❌ [NO_SUCH_CATALOG_EXCEPTION] Catalog 'analytics_prod' was not found
+  ❌ [NO_SUCH_SCHEMA_EXCEPTION] Schema 'customer_metrics' was not found
+  ```
+- 💡 **Enhancement Option**: Could add auto-creation logic for development environments
+
 ### Debugging Commands
 
 ```bash
@@ -370,8 +467,23 @@ databricks bundle validate --target dev
 # Test SQL connection manually
 python scripts/test_runner.py --environment dev --verbose
 
-# Validate YAML files
+# Validate YAML files (including deployment overrides)
 python scripts/validate_yaml.py view_definitions/
+
+# Test multi-destination deployment
+python simple_deploy_metric_views.py --dry-run --verbose
+
+# Validate deployment targets exist (recommended before production deployments)
+python -c "
+from databricks.sdk import WorkspaceClient
+ws = WorkspaceClient()
+try:
+    ws.catalogs.get('your_catalog')
+    ws.schemas.get('your_catalog.your_schema') 
+    print('✅ Deployment targets exist')
+except Exception as e:
+    print(f'❌ Deployment target validation failed: {e}')
+"
 ```
 
 ## 📸 **Recommended Screenshots for Documentation**
@@ -386,10 +498,48 @@ To enhance this documentation, consider adding screenshots of:
 6. **🎯 Unity Catalog Views**: Screenshot of the deployed metric views in Unity Catalog browser
 7. **⚙️ Bundle Deployment**: Terminal output showing successful `databricks bundle deploy`
 
+## 🏗️ **Architecture Benefits**
+
+### Multi-Destination Deployment Architecture
+
+The system uses **declarative YAML configuration** with **intelligent DDL generation**:
+
+1. **📁 Consolidated View Definitions**: Each YAML file contains all metric logic + optional deployment overrides
+2. **🎯 Smart Target Resolution**: Views without `deployment` section use environment defaults; views with `deployment` section override to custom destinations
+3. **🏷️ Consistent Tagging**: System tags (like `system.Certified`) applied to views in their target locations
+4. **🔍 DDL Cleaning**: `deployment` metadata stripped from generated DDL (keeps metric definition pure)
+
+### Key Architecture Patterns:
+
+**Infrastructure as Code:**
+```yaml
+# Single source of truth per metric view
+version: "0.1"
+deployment:          # ← Deployment metadata (not in DDL)
+  catalog: "analytics"
+  schema: "metrics"
+source: "..."        # ← Pure metric definition (in DDL)
+dimensions: [...]    # ← Pure metric definition (in DDL)
+measures: [...]      # ← Pure metric definition (in DDL)  
+```
+
+**Generated DDL (Clean):**
+```sql
+CREATE OR REPLACE VIEW `analytics`.`metrics`.`my_view` (...) 
+WITH METRICS LANGUAGE YAML AS
+$$
+version: "0.1"      -- ← deployment section stripped
+source: "..."       -- ← Only metric logic remains
+dimensions: [...]
+measures: [...]
+$$
+```
+
 ## 🎯 **Migration from Original Python CLI**
 
 The original Python CLI scripts have been preserved in the `og_metric_views/` directory. Key improvements in this DABs-based approach:
 
+- ✅ **Multi-Destination Deployment**: Deploy to multiple catalogs/schemas in single run
 - ✅ **Serverless Compute**: Faster startup, better resource utilization
 - ✅ **Integrated Testing**: Automated validation with each deployment
 - ✅ **Environment Management**: Centralized configuration with templating

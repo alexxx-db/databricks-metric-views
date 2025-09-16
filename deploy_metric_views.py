@@ -54,14 +54,21 @@ def extract_columns(view_content):
     return columns
 
 
-def generate_metric_view_ddl(view_name, view_content, catalog, schema):
-    """Generate DDL for a metric view."""
+def generate_metric_view_ddl(view_name, view_content, default_catalog, default_schema):
+    """Generate DDL for a metric view with optional catalog/schema overrides."""
     columns = extract_columns(view_content)
     column_list = ", ".join(f"`{col}`" for col in columns)
+
+    # Check for deployment overrides in YAML
+    deployment_config = view_content.get("deployment", {})
+    catalog = deployment_config.get("catalog", default_catalog)
+    schema = deployment_config.get("schema", default_schema)
+
     qualified_view = f"`{catalog}`.`{schema}`.`{view_name}`"
 
-    # Convert view content back to YAML string for DDL
-    yaml_content = yaml.dump(view_content, default_flow_style=False)
+    # Remove deployment section from YAML content for DDL (it's metadata, not part of metric definition)
+    clean_content = {k: v for k, v in view_content.items() if k != "deployment"}
+    yaml_content = yaml.dump(clean_content, default_flow_style=False)
 
     ddl = f"""CREATE OR REPLACE VIEW {qualified_view} (
   {column_list}
@@ -70,7 +77,7 @@ $$
 {yaml_content}
 $$"""
 
-    return ddl
+    return ddl, catalog, schema
 
 
 def main():
@@ -89,6 +96,11 @@ def main():
         help="Directory containing view definitions",
     )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Generate DDL without executing (for testing)",
+    )
 
     args = parser.parse_args()
 
@@ -120,22 +132,32 @@ def main():
             try:
                 print(f"🔄 Deploying {view_name}...")
 
-                # Generate DDL
-                ddl = generate_metric_view_ddl(
+                # Generate DDL with potential catalog/schema overrides
+                ddl, target_catalog, target_schema = generate_metric_view_ddl(
                     view_name, view_content, args.catalog, args.schema
                 )
 
-                if args.verbose:
+                if target_catalog != args.catalog or target_schema != args.schema:
+                    print(f"   📍 Target override: {target_catalog}.{target_schema}")
+
+                if args.verbose or args.dry_run:
                     print(f"📄 Generated DDL for {view_name}:")
                     print(ddl)
                     print("-" * 50)
 
-                # Execute DDL
+                if args.dry_run:
+                    print(
+                        f"✅ [DRY RUN] {view_name} would deploy to {target_catalog}.{target_schema}"
+                    )
+                    success_count += 1
+                    continue
+
+                # Execute DDL with target catalog/schema
                 response = workspace_client.statement_execution.execute_statement(
                     warehouse_id=args.warehouse_id,
                     statement=ddl,
-                    catalog=args.catalog,
-                    schema=args.schema,
+                    catalog=target_catalog,
+                    schema=target_schema,
                     wait_timeout="30s",
                 )
 
@@ -159,7 +181,7 @@ def main():
                     # Try to apply tags
                     try:
                         qualified_view = (
-                            f"`{args.catalog}`.`{args.schema}`.`{view_name}`"
+                            f"`{target_catalog}`.`{target_schema}`.`{view_name}`"
                         )
                         tag_sql = f"ALTER TABLE {qualified_view} SET TAGS ('system.Certified')"
 
@@ -167,8 +189,8 @@ def main():
                             workspace_client.statement_execution.execute_statement(
                                 warehouse_id=args.warehouse_id,
                                 statement=tag_sql,
-                                catalog=args.catalog,
-                                schema=args.schema,
+                                catalog=target_catalog,
+                                schema=target_schema,
                                 wait_timeout="30s",
                             )
                         )

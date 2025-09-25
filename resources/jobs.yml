@@ -66,9 +66,9 @@ resources:
       # Email notifications
       email_notifications:
         on_failure:
-          - "ethan.feldman@databricks.com"
+          - "your.email@company.com"
         on_success:
-          - "ethan.feldman@databricks.com"
+          - "your.email@company.com"
           
       # Trigger settings (optional - can be managed via GitHub Actions)
       # trigger:
